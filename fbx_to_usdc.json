@@ -1,0 +1,8 @@
+{
+    "env": [
+        { "FBX2USDC_ROOT": "$HOUDINI_PACKAGE_PATH/FbxToUsdcConverter" },
+        { "PYTHONPATH": { "value": "$FBX2USDC_ROOT/python", "method": "prepend" } },
+        { "HOUDINI_UI_ICON_PATH": { "value": "$FBX2USDC_ROOT/config/Icons", "method": "prepend" } }
+    ],
+    "path": "$FBX2USDC_ROOT"
+}

@@ -1,0 +1,23 @@
+{
+    "_comment": "Settings for the FBX -> USDC Converter (CGA Tools). Edit here, not in code.",
+
+    "obj_subnet_name": "fbx2usdc_import",
+    "fbx_import_node": "kinefx::fbxcharacterimport",
+    "null_rest": "REST_GEO",
+    "null_capture": "CAPTURE_POSE",
+    "null_animated": "ANIMATED_POSE",
+    "usdskel_import_node": "kinefx::sopcharacterimport",
+    "usd_rop_node": "usd_rop",
+
+    "skeleton_primitive_path": "skeleton",
+    "animation_primitive_path": "animation",
+
+    "default_fps": 24,
+    "default_start": 1,
+    "default_end": 240,
+
+    "usdc_output_pattern": "$HIP/usd/{name}.usdc",
+    "default_write_now": false,
+    "flatten_stage": true,
+    "usd_save_style": "flattenstage"
+}
