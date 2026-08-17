@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.5
+- Added scripts/pythonrc.py as a second startup hook for shelf registration
+  (more reliable than 456.py alone; idempotent, so no double buttons).
+- SOP Import UsdSkel Character now sets Subset Attributes (restgeo_partitionattribs)
+  to "fbx_material_name" by default, so the mesh is split into per-material
+  GeomSubsets on import - required for Prop/Character Material Creator to have
+  subsets to assign onto. Configurable via restgeo_partition_attribs in
+  config/settings.json.
+
 ## 1.0.4
 - New shelf icon.
 - Added GitHub Actions release workflow: pushing a vX.Y.Z tag now auto-packages
