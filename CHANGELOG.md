@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.6
+- Fixed Subset Attributes not applying: the restgeo_partitionattribs value has
+  a separate enable toggle (restgeo_enablepartitionattribs) that must be set
+  to 1, or the node ignores the text value. Now both are set on build.
+
 ## 1.0.5
 - Added scripts/pythonrc.py as a second startup hook for shelf registration
   (more reliable than 456.py alone; idempotent, so no double buttons).

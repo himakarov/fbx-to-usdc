@@ -223,8 +223,11 @@ def build(fbx_path,
 
     # Subset Attributes (Import Rest Geometry Data block): split the mesh into
     # GeomSubsets by this SOP attribute, so the material tools (Prop/Character
-    # Material Creator) have per-material subsets to assign onto. Without this
-    # the importer leaves the mesh as one undivided prim.
+    # Material Creator) have per-material subsets to assign onto. This has a
+    # separate enable toggle (restgeo_enablepartitionattribs) that must be
+    # switched on, or the text value alone is ignored by the node.
+    _set_parm(usdskel, "restgeo_enablepartitionattribs", 1,
+              warnings, "Subset Attributes toggle (rest geometry)", quiet=True)
     _set_parm(usdskel, "restgeo_partitionattribs",
               cfg.get("restgeo_partition_attribs", "fbx_material_name"),
               warnings, "Subset Attributes (rest geometry)", quiet=True)
