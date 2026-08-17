@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.7
+- Fixed shelf button not appearing on startup: registration now runs from
+  scripts/python/ready.py via hdefereval.executeDeferred (same pattern as the
+  Character Material Tool), instead of scripts/456.py alone. 456.py runs too
+  early on some builds (observed with Steam Houdini Indie) for shelf objects
+  to be touched safely. 456.py is kept as a harmless secondary attempt.
+- Removed scripts/pythonrc.py (unreliable, replaced by ready.py).
+
 ## 1.0.6
 - Fixed Subset Attributes not applying: the restgeo_partitionattribs value has
   a separate enable toggle (restgeo_enablepartitionattribs) that must be set
