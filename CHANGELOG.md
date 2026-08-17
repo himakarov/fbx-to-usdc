@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4
+- New shelf icon.
+- Added GitHub Actions release workflow: pushing a vX.Y.Z tag now auto-packages
+  the repo and publishes the release, so the release zip always matches main.
+
 ## 1.0.3
 - Self-update from GitHub (himakarov/fbx-to-usdc), same pattern as the Character
   Material Tool: "Check for updates" and "Changelog" buttons in the panel,

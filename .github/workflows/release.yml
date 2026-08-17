@@ -1,0 +1,41 @@
+name: Release
+
+# Runs when you push a tag like v1.0.4. The tag is the trigger; whatever is in
+# the repo at that tag gets packaged and released - so the release always
+# matches the repo (icon included).
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # needed to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package into FbxToUsdcConverter.zip
+        run: |
+          # Build the install layout: a top-level FbxToUsdcConverter/ folder
+          # containing the whole package, matching what goes into packages/.
+          mkdir -p dist/FbxToUsdcConverter
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='dist' \
+            ./ dist/FbxToUsdcConverter/
+          cd dist
+          zip -r FbxToUsdcConverter.zip FbxToUsdcConverter
+          cd ..
+          ls -la dist
+
+      - name: Create release with the zip attached
+        uses: softprops/action-gh-release@v2
+        with:
+          # release name = the tag (e.g. v1.0.4)
+          files: dist/FbxToUsdcConverter.zip
+          generate_release_notes: false
