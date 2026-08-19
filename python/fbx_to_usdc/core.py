@@ -50,6 +50,10 @@ _USDSKEL_IMPORT_CANDIDATES = (
     "sopcharacterimport",
 )
 
+_REFERENCE_CANDIDATES = (
+    "reference",
+)
+
 
 def _resolve_sop_type(candidates):
     table = hou.sopNodeTypeCategory().nodeTypes()
@@ -99,6 +103,7 @@ def build(fbx_path,
           start=None,
           end=None,
           write_now=False,
+          create_reference=False,
           cfg=None):
     """Build the FBX -> UsdSkel -> USDC chain from scratch.
 
@@ -110,6 +115,11 @@ def build(fbx_path,
         fps:            frames per second (int) or None -> config default
         start,end:      frame range (ints) or None -> config defaults
         write_now:      if True, execute the USD ROP and write the .usdc now
+        create_reference: if True (and the file was actually written), also
+                        create a standalone Reference LOP in /stage that reads
+                        the written .usdc back in, named after the animation
+                        clip. Useful for immediately dropping the exported
+                        character into the same scene (e.g. to lay out a shot).
         cfg:            a config.Config; loaded if None
 
     Returns a dict report (see ui._report_result), or {"error": ...}.
@@ -277,6 +287,29 @@ def build(fbx_path,
             report["usdc"] = hou.text.expandString(usdc_path)
         except Exception as exc:
             warnings.append("Write failed: %s" % exc)
+
+    # ================================================================
+    # 5. optionally create a Reference LOP reading the written file back in
+    # ================================================================
+    if create_reference:
+        if not report.get("written"):
+            warnings.append("Reference node skipped: USDC was not written "
+                            "(enable 'Write USDC now' to create it).")
+        else:
+            ref_type = _resolve_lop_type(_REFERENCE_CANDIDATES)
+            if ref_type is None:
+                warnings.append("Reference node type not found (looked for: "
+                                "%s)." % ", ".join(_REFERENCE_CANDIDATES))
+            else:
+                ref_node = stage.createNode(
+                    ref_type, _unique_name(stage, name))
+                _set_first_parm(ref_node, ("primpath1", "primpath"),
+                                "/" + name, warnings, "Reference primitive path")
+                _set_first_parm(ref_node, ("filepath1", "filepath"),
+                                report["usdc"], warnings,
+                                "Reference file pattern")
+                report["reference_node"] = ref_node.path()
+                stage.layoutChildren()
 
     return report
 

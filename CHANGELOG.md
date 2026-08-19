@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.8
+- New: "Create Reference node" option (Single tab) - after writing the .usdc,
+  optionally creates a Reference LOP in /stage reading the file back in,
+  named after the animation clip, with Primitive Path /<name>. Off by default
+  (default_create_reference in config/settings.json).
+- New: "Batch Convert" tab - convert many clips in one pass via a table of
+  (mesh, animation, output) rows. Covers both batch cases: several different
+  character+animation pairs ("Add Pair..." - one call per pair, different mesh
+  each time) and one character with many animations ("Add Animations for One
+  Mesh..." - pick the mesh once, multi-select animation files, one row per
+  file). Shared fps/range/write/reference settings apply to all rows; each row
+  calls the same build() used by the Single tab. Report lists per-row
+  success/failure and a final count.
+
 ## 1.0.7
 - Fixed shelf button not appearing on startup: registration now runs from
   scripts/python/ready.py via hdefereval.executeDeferred (same pattern as the

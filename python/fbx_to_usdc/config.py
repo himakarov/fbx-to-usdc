@@ -55,6 +55,16 @@ _BUILTIN = {
     # the auto-generated-path message from the agent OUT_STATIC reference.
     "flatten_stage": True,
     "usd_save_style": "flattenstage",
+
+    # Import Rest Geometry Data > Subset Attributes: SOP attribute used to
+    # split the mesh into per-material GeomSubsets on import. Needed so the
+    # material tools (Prop/Character Material Creator) have subsets to assign
+    # onto.
+    "restgeo_partition_attribs": "fbx_material_name",
+
+    # Single tab: create a Reference LOP reading the written .usdc back into
+    # /stage by default.
+    "default_create_reference": False,
 }
 
 
