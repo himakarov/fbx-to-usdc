@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.9
+- Fixed: building/converting no longer rearranges the whole /stage network.
+  stage.layoutChildren() with no arguments repositions every node in the
+  network, scrambling any manual layout the user had; it's now scoped to only
+  the nodes just created (layoutChildren(items=...)), so existing nodes stay
+  exactly where they are.
+
 ## 1.0.8
 - New: "Create Reference node" option (Single tab) - after writing the .usdc,
   optionally creates a Reference LOP in /stage reading the file back in,

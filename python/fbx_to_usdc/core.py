@@ -268,7 +268,14 @@ def build(fbx_path,
     _set_range_parms(rop, start, end, warnings, trange_full=True)
     report["rop"] = rop.path()
 
-    stage.layoutChildren()
+    # Lay out only the nodes we just created (items=...), not the whole
+    # network - layoutChildren() with no arguments repositions EVERY node in
+    # /stage, which would scramble any manual arrangement the user already
+    # has in the network view.
+    try:
+        stage.layoutChildren(items=(usdskel, rop))
+    except Exception:
+        pass
 
     # ================================================================
     # 4. optionally write now
@@ -309,7 +316,10 @@ def build(fbx_path,
                                 report["usdc"], warnings,
                                 "Reference file pattern")
                 report["reference_node"] = ref_node.path()
-                stage.layoutChildren()
+                try:
+                    stage.layoutChildren(items=(ref_node,))
+                except Exception:
+                    pass
 
     return report
 
