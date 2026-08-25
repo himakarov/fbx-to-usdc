@@ -282,9 +282,10 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
             try:
                 scene_fps = hou.fps()
                 if abs(scene_fps - source_fps) > 0.01:
-                    msg += ("\nNote: the scene is at %g fps - the range above "
-                            "is in scene frames, already retimed by Houdini."
-                            % scene_fps)
+                    msg += ("\nNote: the scene is at %g fps but the file is %g "
+                            "fps. The range above is the file's own frames; "
+                            "set the scene to %g fps before converting to "
+                            "avoid a retime." % (scene_fps, source_fps, source_fps))
             except Exception:
                 pass
         self._say_single(msg)

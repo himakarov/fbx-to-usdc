@@ -157,10 +157,11 @@ def detect_animation_range(fbx_path, anim_fbx_path=None):
         {'name': ..., 'range': Vector2(seconds), 'rate': scene fps,
          'source_range': Vector2(seconds), 'source_rate': file fps}
 
-    'range'/'rate' are what Houdini has already retimed into the current
-    scene fps, which is what the rest of the pipeline actually works in, so
-    that is what we convert to frames. 'source_rate' is returned separately
-    so the caller can surface the file's native fps.
+    We use 'source_range' x 'source_rate' - the clip's own frame numbers as
+    the animator authored them (verified against the same file opened in
+    Cinema 4D). 'range'/'rate' are Houdini's retimed-into-scene-fps version,
+    which reports different numbers whenever the scene fps differs from the
+    file's, and does not match what the animator sees.
 
     Returns (start, end, source_fps, warning_or_None). (None, None, None) on
     failure, with warning_or_None explaining why.
@@ -215,11 +216,15 @@ def detect_animation_range(fbx_path, anim_fbx_path=None):
                                       "animation.")
         try:
             info = geo.attribValue(attr)
-            rng = info["range"]          # seconds, already in scene fps
-            rate = float(info["rate"])   # scene fps
+            rate = float(info["rate"])
             source_rate = float(info.get("source_rate", rate))
-            start_val = int(round(float(rng[0]) * rate))
-            end_val = int(round(float(rng[1]) * rate))
+            # the clip's own frame numbers, as authored - see docstring
+            rng = info.get("source_range")
+            if rng is None:
+                rng = info["range"]
+                source_rate = rate
+            start_val = int(round(float(rng[0]) * source_rate))
+            end_val = int(round(float(rng[1]) * source_rate))
         except Exception as exc:
             return None, None, None, ("Could not interpret clipinfo: %s" % exc)
 

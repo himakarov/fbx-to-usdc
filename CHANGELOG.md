@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.18
+- "Detect from Animation FBX" now reports the clip's own frame numbers -
+  clipinfo's source_range x source_rate - instead of Houdini's
+  retimed-into-scene-fps range x rate used in 1.0.17. For a 30fps clip in a
+  24fps scene that is the difference between 235-563 (what the animator sees,
+  verified against the same file in Cinema 4D) and 0-262 (Houdini's retimed
+  version).
+- The fps mismatch note now suggests setting the scene to the file's fps
+  before converting, rather than describing the retime.
+
 ## 1.0.17
 - "Detect from Animation FBX" now actually works. The node's Animation
   Start/End parms turned out to be unusable from Python - read
