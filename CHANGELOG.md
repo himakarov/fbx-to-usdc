@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.10
+- Fixed a broken package manifest: fbx_to_usdc.json had been accidentally
+  overwritten with settings content during the v1.0.8 update, which made
+  Houdini unable to locate the package at all (FBX2USDC_ROOT resolved to
+  None) after updating via "Check for updates". Restored the correct
+  manifest and the default_create_reference setting that was lost with it.
+
 ## 1.0.9
 - Fixed: building/converting no longer rearranges the whole /stage network.
   stage.layoutChildren() with no arguments repositions every node in the

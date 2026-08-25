@@ -16,5 +16,6 @@
     "default_write_now": false,
     "flatten_stage": true,
     "usd_save_style": "flattenstage",
-    "restgeo_partition_attribs": "fbx_material_name"
+    "restgeo_partition_attribs": "fbx_material_name",
+    "default_create_reference": false
 }
