@@ -460,6 +460,20 @@ def build(fbx_path,
               cfg.get("restgeo_partition_attribs", "fbx_material_name"),
               warnings, "Subset Attributes (rest geometry)", quiet=True)
 
+    # When the animation has been retimed to start at 0, the node must stop
+    # reading its clip range from the clipinfo detail attribute: clipinfo
+    # still carries the ORIGINAL source range (the Time Shift SOP does not
+    # rewrite it), so in 'attrib' mode the node would import the untouched
+    # source frames and the shift would appear to do nothing. Switch it to a
+    # custom range covering the retimed clip instead.
+    if shift_to_zero and effective_start != start:
+        _set_parm(usdskel, "cliprangemode", "custom",
+                  warnings, "Clip Range mode")
+        _set_parm(usdskel, "f1", effective_start, warnings,
+                  "Clip Range start", quiet=True)
+        _set_parm(usdskel, "f2", effective_end, warnings,
+                  "Clip Range end", quiet=True)
+
     # ================================================================
     # 3. USD ROP writing the composed stage to .usdc
     # ================================================================

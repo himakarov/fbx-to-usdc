@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.20
+- "Shift animation to start at frame 0" works end to end now. The Time Shift
+  SOP fix in 1.0.19 was correct but had no visible effect, because SOP Import
+  UsdSkel Character defaults to Clip Range = "Use clipinfo Detail Attribute",
+  and clipinfo still carries the ORIGINAL source range (Time Shift does not
+  rewrite it) - so the node kept importing the untouched source frames. With
+  the shift enabled, the node is now switched to "Custom Frame Range"
+  (cliprangemode='custom') with f1/f2 set to the retimed 0..(end-start).
+
 ## 1.0.19
 - "Shift animation to start at frame 0" now actually shifts. The Time Shift
   SOP has no "shift" parm (the name assumed in 1.0.13-1.0.18, which produced
