@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.19
+- "Shift animation to start at frame 0" now actually shifts. The Time Shift
+  SOP has no "shift" parm (the name assumed in 1.0.13-1.0.18, which produced
+  a "Parm 'shift' not found" warning and no shift at all) - its parms are
+  method/frame/time/... Correct approach: set method to By Frame and put the
+  expression "$F + <start>" in "frame", because Time Shift pulls the frame
+  named in that parm onto the current frame rather than offsetting by a
+  constant.
+
 ## 1.0.18
 - "Detect from Animation FBX" now reports the clip's own frame numbers -
   clipinfo's source_range x source_rate - instead of Houdini's

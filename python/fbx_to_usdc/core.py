@@ -370,13 +370,31 @@ def build(fbx_path,
         else:
             ts = geo.createNode(ts_type, "shift_to_zero")
             ts.setInput(0, fbx_node, 2)
-            # NOTE: the "shift" parm name/sign is the long-standing Houdini
-            # default but hasn't been confirmed against a live Time Shift
-            # node in this project (unlike the other parms above). If the
-            # exported clip doesn't start at frame 0, or starts at the wrong
-            # end, check the node's actual parm name via Copy Parameter Name
-            # and tell me - this is a one-line fix.
-            ok = _set_parm(ts, "shift", -start, warnings, "Time Shift amount")
+            # Time Shift semantics: it pulls whatever existed at the frame in
+            # its "frame" parm onto the current frame. So to make source
+            # frame `start` land on frame 0, every frame must read from
+            # $F + start - an expression, not a constant. (There is no
+            # "shift" parm on this node; confirmed parm list is
+            # method/frame/integerframe/time/rangeclamp/...)
+            ok = False
+            method = ts.parm("method")
+            if method is not None:
+                # method 0 = By Time (uses "time"), 1 = By Frame (uses
+                # "frame"). We drive frames, so force By Frame.
+                try:
+                    method.set(1)
+                except Exception as exc:
+                    warnings.append("Could not set Time Shift method: %s" % exc)
+            fp = ts.parm("frame")
+            if fp is None:
+                warnings.append("Parm 'frame' not found on the Time Shift "
+                                "node - cannot shift animation to frame 0.")
+            else:
+                try:
+                    fp.setExpression("$F + %d" % start)
+                    ok = True
+                except Exception as exc:
+                    warnings.append("Could not set Time Shift frame: %s" % exc)
             if ok:
                 animated_src, animated_out = ts, 0
                 effective_start, effective_end = 0, max(0, end - start)

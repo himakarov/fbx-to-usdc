@@ -1,6 +1,6 @@
 """FBX to USDC Converter - build a UsdSkel pipeline from an FBX and write .usdc."""
 
-__version__ = "1.0.18"
+__version__ = "1.0.19"
 
 from . import core     # noqa: F401
 from . import ui       # noqa: F401
