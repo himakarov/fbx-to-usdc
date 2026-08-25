@@ -269,13 +269,25 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         if not mesh:
             self._say_single("Pick the mesh FBX first.")
             return
-        start, end, warn = core.detect_animation_range(mesh, anim)
+        start, end, source_fps, warn = core.detect_animation_range(mesh, anim)
         if warn:
             self._say_single("Could not detect range: " + warn)
             return
         self.start_spin.setValue(start)
         self.end_spin.setValue(end)
-        self._say_single("Detected range: %d - %d" % (start, end))
+        msg = "Detected range: %d - %d" % (start, end)
+        if source_fps:
+            self.fps_spin.setValue(int(round(source_fps)))
+            msg += "  (source file fps: %g)" % source_fps
+            try:
+                scene_fps = hou.fps()
+                if abs(scene_fps - source_fps) > 0.01:
+                    msg += ("\nNote: the scene is at %g fps - the range above "
+                            "is in scene frames, already retimed by Houdini."
+                            % scene_fps)
+            except Exception:
+                pass
+        self._say_single(msg)
 
     # -- single: build --------------------------------------------------------
     def _on_build(self):
@@ -566,7 +578,8 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
 
             row_start, row_end = shared_start, shared_end
             if auto_detect:
-                d_start, d_end, d_warn = core.detect_animation_range(mesh, anim)
+                d_start, d_end, _d_fps, d_warn = core.detect_animation_range(
+                    mesh, anim)
                 if d_warn:
                     lines.append("[FAIL] %s: could not detect range - %s"
                                  % (label, d_warn))

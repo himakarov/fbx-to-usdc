@@ -146,21 +146,39 @@ def detect_animation_range(fbx_path, anim_fbx_path=None):
     node (same fbxfile/animfbxfile), so the detected range matches what the
     real conversion will actually use.
 
-    Returns (start, end, warning_or_None). (start, end) is (None, None) on
+    The range comes from the "clipinfo" detail attribute on the node's
+    animated output (output 2) - the same source SOP Import UsdSkel Character
+    uses for its "Use clipinfo Detail Attribute" Clip Range mode. The node's
+    own Animation Start/End parms are NOT usable here: read programmatically
+    they just report Houdini's scene $FSTART/$FEND, no matter how hard the
+    node is reloaded or cooked.
+
+    clipinfo looks like:
+        {'name': ..., 'range': Vector2(seconds), 'rate': scene fps,
+         'source_range': Vector2(seconds), 'source_rate': file fps}
+
+    'range'/'rate' are what Houdini has already retimed into the current
+    scene fps, which is what the rest of the pipeline actually works in, so
+    that is what we convert to frames. 'source_rate' is returned separately
+    so the caller can surface the file's native fps.
+
+    Returns (start, end, source_fps, warning_or_None). (None, None, None) on
     failure, with warning_or_None explaining why.
     """
     fbx_type = _resolve_sop_type(_FBX_IMPORT_CANDIDATES)
     if fbx_type is None:
-        return None, None, ("FBX Character Import node type not found "
-                            "(looked for: %s)." % ", ".join(_FBX_IMPORT_CANDIDATES))
+        return None, None, None, ("FBX Character Import node type not found "
+                                  "(looked for: %s)."
+                                  % ", ".join(_FBX_IMPORT_CANDIDATES))
 
     expanded_mesh = hou.text.expandString(fbx_path) if fbx_path else ""
     if not expanded_mesh or not os.path.isfile(expanded_mesh):
-        return None, None, "Pick a valid mesh FBX first."
+        return None, None, None, "Pick a valid mesh FBX first."
 
     expanded_anim = hou.text.expandString(anim_fbx_path) if anim_fbx_path else ""
     if anim_fbx_path and not os.path.isfile(expanded_anim):
-        return None, None, "Animation FBX does not exist:\n%s" % expanded_anim
+        return None, None, None, ("Animation FBX does not exist:\n%s"
+                                  % expanded_anim)
 
     obj = hou.node("/obj")
     tmp = obj.createNode("geo", _unique_name(obj, "fbx2usdc_detect_tmp"))
@@ -168,58 +186,44 @@ def detect_animation_range(fbx_path, anim_fbx_path=None):
         node = tmp.createNode(fbx_type, "fbxcharacterimport")
         p = node.parm("fbxfile")
         if p is None:
-            return None, None, "Parm 'fbxfile' not found on the FBX import node."
+            return None, None, None, ("Parm 'fbxfile' not found on the FBX "
+                                      "import node.")
         p.set(expanded_mesh)
         if expanded_anim:
             ap = node.parm("animfbxfile")
             if ap is not None:
                 ap.set(expanded_anim)
 
-        # Switch the Timing tab to "By Frame" so animationstartframe/
-        # animationendframe read directly in frames (no fps conversion
-        # needed) - matches the confirmed parm names on this node.
-        method = node.parm("timeshiftmethod")
-        if method is not None:
-            try:
-                labels = [lbl.strip().lower() for lbl in method.menuLabels()]
-                items = method.menuItems()
-                if "by frame" in labels:
-                    method.set(items[labels.index("by frame")])
-            except Exception:
-                pass
-
-        # The Animation Start/End parms only reflect the real file once the
-        # node has actually loaded it. Confirmed sequence: press "Reload"
-        # (parm name "reload") to make the node (re-)read the FBX, then force
-        # a full cook by requesting geometry() - node.cook(force=True) alone
-        # was not enough to populate the range in testing.
-        reload_parm = node.parm("reload")
-        if reload_parm is not None:
-            try:
-                reload_parm.pressButton()
-            except Exception:
-                pass
+        # clipinfo lives on the animated output (2), so tap it with a null -
+        # SopNode has no geometryAtIndex() in this Houdini version.
+        tap = tmp.createNode("null", "detect_tap")
         try:
-            node.geometry()
-        except Exception:
-            pass
-        try:
-            node.cook(force=True)
+            tap.setInput(0, node, 2)
         except Exception as exc:
-            return None, None, "Could not read the FBX file: %s" % exc
+            return None, None, None, ("Could not read the animated output: %s"
+                                      % exc)
 
-        sp = node.parm("animationstartframe")
-        ep = node.parm("animationendframe")
-        if sp is None or ep is None:
-            return None, None, ("Could not find animation range parameters "
-                                "on the FBX Character Import node (expected "
-                                "animationstartframe/animationendframe).")
         try:
-            start_val = int(round(sp.eval()))
-            end_val = int(round(ep.eval()))
+            geo = tap.geometry()
         except Exception as exc:
-            return None, None, "Could not read the animation range: %s" % exc
-        return start_val, end_val, None
+            return None, None, None, "Could not read the FBX file: %s" % exc
+
+        attr = geo.findGlobalAttrib("clipinfo")
+        if attr is None:
+            return None, None, None, ("No 'clipinfo' found on the animated "
+                                      "output - the file may contain no "
+                                      "animation.")
+        try:
+            info = geo.attribValue(attr)
+            rng = info["range"]          # seconds, already in scene fps
+            rate = float(info["rate"])   # scene fps
+            source_rate = float(info.get("source_rate", rate))
+            start_val = int(round(float(rng[0]) * rate))
+            end_val = int(round(float(rng[1]) * rate))
+        except Exception as exc:
+            return None, None, None, ("Could not interpret clipinfo: %s" % exc)
+
+        return start_val, end_val, source_rate, None
     finally:
         try:
             tmp.destroy()

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.17
+- "Detect from Animation FBX" now actually works. The node's Animation
+  Start/End parms turned out to be unusable from Python - read
+  programmatically they always report Houdini's scene $FSTART/$FEND (the
+  generic 1-240), regardless of pressing Reload, cook(force=True) or
+  requesting geometry() (the failed attempts in 1.0.14-1.0.16). The range is
+  now read from the "clipinfo" detail attribute on the FBX import's animated
+  output instead - the same source SOP Import UsdSkel Character uses for its
+  "Use clipinfo Detail Attribute" Clip Range mode.
+- Detect also fills FPS with the source file's native rate (clipinfo
+  "source_rate"), and warns in the report when that differs from the scene
+  fps - the detected range is in scene frames (Houdini retimes the clip on
+  import), so a 30fps clip in a 24fps scene reports the retimed range, not
+  the raw file frames.
+
 ## 1.0.16
 - "Detect from Animation FBX" fix, take 2: confirmed the button parm name is
   "reload" (Import tab). detect_animation_range() now presses it and then
