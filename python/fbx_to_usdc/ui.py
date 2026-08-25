@@ -278,16 +278,7 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         msg = "Detected range: %d - %d" % (start, end)
         if source_fps:
             self.fps_spin.setValue(int(round(source_fps)))
-            msg += "  (source file fps: %g)" % source_fps
-            try:
-                scene_fps = hou.fps()
-                if abs(scene_fps - source_fps) > 0.01:
-                    msg += ("\nNote: the scene is at %g fps but the file is %g "
-                            "fps. The range above is the file's own frames; "
-                            "set the scene to %g fps before converting to "
-                            "avoid a retime." % (scene_fps, source_fps, source_fps))
-            except Exception:
-                pass
+            msg += "  (source file: %g fps)" % source_fps
         self._say_single(msg)
 
     # -- single: build --------------------------------------------------------
@@ -587,12 +578,12 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
                                  % (label, d_warn))
                     continue
                 row_start, row_end = d_start, d_end
-                # The fps field is applied to every row as-is (rows can come
-                # from different sources), so flag any row whose file was
-                # authored at a different rate rather than silently retiming.
-                if d_fps and abs(d_fps - fps) > 0.01:
-                    row_fps_note = ("      ! source file is %g fps, "
-                                    "converting at %g" % (d_fps, fps))
+                # Informational only: the written file ends up with the
+                # clip's own timeCodesPerSecond (verified on export), so a
+                # differing FPS field does not retime anything - just show
+                # what the source was authored at.
+                if d_fps:
+                    row_fps_note = "      source file: %g fps" % d_fps
 
             try:
                 result = core.build(

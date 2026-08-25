@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1
+- Removed a misleading fps warning. Both tabs used to warn that a clip would
+  be "converted at" the FPS field's value when it differed from the source
+  file - but checking an exported file shows the .usdc gets the clip's own
+  timeCodesPerSecond (a 30fps clip exported with 24 in the field still comes
+  out at 30, correct duration, nothing retimed). The reports now just state
+  the source file's fps as information.
+
 ## 1.1.0
 First feature release since 1.0.0. Everything from the 1.0.x line, summarised:
 
