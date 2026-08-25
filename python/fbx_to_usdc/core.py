@@ -54,6 +54,10 @@ _REFERENCE_CANDIDATES = (
     "reference",
 )
 
+_TIMESHIFT_CANDIDATES = (
+    "timeshift",
+)
+
 
 def _resolve_sop_type(candidates):
     table = hou.sopNodeTypeCategory().nodeTypes()
@@ -133,6 +137,77 @@ _REFERENCE_SPACING_DEFAULT = 1.2
 
 
 # ---------------------------------------------------------------------------
+# Range detection
+# ---------------------------------------------------------------------------
+def detect_animation_range(fbx_path, anim_fbx_path=None):
+    """Read the real frame range of the source animation via a temporary FBX
+    Character Import node - created, read, and destroyed immediately, never
+    left visible in the scene. Mirrors exactly how build() configures the
+    node (same fbxfile/animfbxfile), so the detected range matches what the
+    real conversion will actually use.
+
+    Returns (start, end, warning_or_None). (start, end) is (None, None) on
+    failure, with warning_or_None explaining why.
+    """
+    fbx_type = _resolve_sop_type(_FBX_IMPORT_CANDIDATES)
+    if fbx_type is None:
+        return None, None, ("FBX Character Import node type not found "
+                            "(looked for: %s)." % ", ".join(_FBX_IMPORT_CANDIDATES))
+
+    expanded_mesh = hou.text.expandString(fbx_path) if fbx_path else ""
+    if not expanded_mesh or not os.path.isfile(expanded_mesh):
+        return None, None, "Pick a valid mesh FBX first."
+
+    expanded_anim = hou.text.expandString(anim_fbx_path) if anim_fbx_path else ""
+    if anim_fbx_path and not os.path.isfile(expanded_anim):
+        return None, None, "Animation FBX does not exist:\n%s" % expanded_anim
+
+    obj = hou.node("/obj")
+    tmp = obj.createNode("geo", _unique_name(obj, "fbx2usdc_detect_tmp"))
+    try:
+        node = tmp.createNode(fbx_type, "fbxcharacterimport")
+        p = node.parm("fbxfile")
+        if p is None:
+            return None, None, "Parm 'fbxfile' not found on the FBX import node."
+        p.set(expanded_mesh)
+        if expanded_anim:
+            ap = node.parm("animfbxfile")
+            if ap is not None:
+                ap.set(expanded_anim)
+
+        # Switch the Timing tab to "By Frame" so animationstartframe/
+        # animationendframe read directly in frames (no fps conversion
+        # needed) - matches the confirmed parm names on this node.
+        method = node.parm("timeshiftmethod")
+        if method is not None:
+            try:
+                labels = [lbl.strip().lower() for lbl in method.menuLabels()]
+                items = method.menuItems()
+                if "by frame" in labels:
+                    method.set(items[labels.index("by frame")])
+            except Exception:
+                pass
+
+        sp = node.parm("animationstartframe")
+        ep = node.parm("animationendframe")
+        if sp is None or ep is None:
+            return None, None, ("Could not find animation range parameters "
+                                "on the FBX Character Import node (expected "
+                                "animationstartframe/animationendframe).")
+        try:
+            start_val = int(round(sp.eval()))
+            end_val = int(round(ep.eval()))
+        except Exception as exc:
+            return None, None, "Could not read the animation range: %s" % exc
+        return start_val, end_val, None
+    finally:
+        try:
+            tmp.destroy()
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 def build(fbx_path,
@@ -146,6 +221,7 @@ def build(fbx_path,
           chain_references=False,
           previous_reference=None,
           cleanup_build_nodes=False,
+          shift_to_zero=False,
           cfg=None):
     """Build the FBX -> UsdSkel -> USDC chain from scratch.
 
@@ -176,6 +252,13 @@ def build(fbx_path,
                         it's no longer needed - the .usdc is already on disk,
                         so only the Reference node (if any) needs to remain
                         to show the asset in this scene.
+        shift_to_zero:  if True, retimes the animated stream so source frame
+                        `start` becomes frame 0 in the written file (common
+                        need when an animator hands off a clip that starts at
+                        an arbitrary frame, e.g. 90-710). Uses a Time Shift
+                        SOP; the write range is adjusted to 0..(end-start)
+                        accordingly. Use detect_animation_range() to find the
+                        real `start`/`end` of a source file first.
         cfg:            a config.Config; loaded if None
 
     Returns a dict report (see ui._report_result), or {"error": ...}. On
@@ -245,18 +328,43 @@ def build(fbx_path,
 
     report["fbx_node"] = fbx_node.path()
 
+    # Optionally retime the animated stream so source frame `start` becomes
+    # frame 0 in the written file. Only the animated output needs this - rest
+    # geometry and the capture pose are static poses, not time-dependent.
+    animated_src, animated_out = fbx_node, 2
+    effective_start, effective_end = start, end
+    if shift_to_zero:
+        ts_type = _resolve_sop_type(_TIMESHIFT_CANDIDATES)
+        if ts_type is None:
+            warnings.append("Time Shift SOP not found - cannot shift "
+                            "animation to frame 0.")
+        else:
+            ts = geo.createNode(ts_type, "shift_to_zero")
+            ts.setInput(0, fbx_node, 2)
+            # NOTE: the "shift" parm name/sign is the long-standing Houdini
+            # default but hasn't been confirmed against a live Time Shift
+            # node in this project (unlike the other parms above). If the
+            # exported clip doesn't start at frame 0, or starts at the wrong
+            # end, check the node's actual parm name via Copy Parameter Name
+            # and tell me - this is a one-line fix.
+            ok = _set_parm(ts, "shift", -start, warnings, "Time Shift amount")
+            if ok:
+                animated_src, animated_out = ts, 0
+                effective_start, effective_end = 0, max(0, end - start)
+
     # three nulls, tapping the confirmed output order:
-    #   0 = rest geo, 1 = capture pose, 2 = animated pose
+    #   0 = rest geo, 1 = capture pose, 2 = animated pose (or its Time Shift)
     null_specs = (
-        ("rest", cfg.get("null_rest", "REST_GEO"), 0),
-        ("capture", cfg.get("null_capture", "CAPTURE_POSE"), 1),
-        ("animated", cfg.get("null_animated", "ANIMATED_POSE"), 2),
+        ("rest", cfg.get("null_rest", "REST_GEO"), fbx_node, 0),
+        ("capture", cfg.get("null_capture", "CAPTURE_POSE"), fbx_node, 1),
+        ("animated", cfg.get("null_animated", "ANIMATED_POSE"),
+         animated_src, animated_out),
     )
     nulls = {}
-    for key, null_name, out_idx in null_specs:
+    for key, null_name, src_node, out_idx in null_specs:
         n = geo.createNode("null", null_name)
         try:
-            n.setInput(0, fbx_node, out_idx)
+            n.setInput(0, src_node, out_idx)
         except Exception as exc:
             warnings.append("Could not wire %s null to output %d: %s"
                             % (key, out_idx, exc))
@@ -328,7 +436,7 @@ def build(fbx_path,
                      if cfg.get("flatten_stage", True) else "separate")
     _set_first_parm(rop, ("savestyle",), flatten_style,
                     warnings, "save style", quiet=True)
-    _set_range_parms(rop, start, end, warnings, trange_full=True)
+    _set_range_parms(rop, effective_start, effective_end, warnings, trange_full=True)
     report["rop"] = rop.path()
 
     # Lay usdskel/rop out relative to each other first (items=... so this

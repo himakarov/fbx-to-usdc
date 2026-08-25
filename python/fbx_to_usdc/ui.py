@@ -186,10 +186,9 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         range_row.addWidget(self.end_spin)
 
         range_row.addStretch(1)
-        self.scene_btn = QtWidgets.QPushButton("Use scene range")
-        self.scene_btn.clicked.connect(
-            lambda: self._use_scene_range(self.fps_spin, self.start_spin, self.end_spin))
-        range_row.addWidget(self.scene_btn)
+        self.detect_btn = QtWidgets.QPushButton("Detect from Animation FBX")
+        self.detect_btn.clicked.connect(self._on_detect_range)
+        range_row.addWidget(self.detect_btn)
         layout.addLayout(range_row)
 
         # 5. flags
@@ -197,6 +196,11 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
             "Write USDC now (unchecked = only build the network)")
         self.write_check.setChecked(bool(self._cfg.get("default_write_now", False)))
         layout.addWidget(self.write_check)
+
+        self.shift_check = QtWidgets.QCheckBox(
+            "Shift animation to start at frame 0 (uses Start above as the "
+            "source frame)")
+        layout.addWidget(self.shift_check)
 
         self.ref_check = QtWidgets.QCheckBox(
             "Create Reference node reading the written file back into /stage")
@@ -259,17 +263,19 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         if text:
             self.out_edit.setText(text)
 
-    def _use_scene_range(self, fps_spin, start_spin, end_spin):
-        try:
-            start, end = hou.playbar.frameRange()
-            start_spin.setValue(int(start))
-            end_spin.setValue(int(end))
-        except Exception:
-            pass
-        try:
-            fps_spin.setValue(int(round(hou.fps())))
-        except Exception:
-            pass
+    def _on_detect_range(self):
+        mesh = self.fbx_edit.text().strip()
+        anim = self.anim_edit.text().strip()
+        if not mesh:
+            self._say_single("Pick the mesh FBX first.")
+            return
+        start, end, warn = core.detect_animation_range(mesh, anim)
+        if warn:
+            self._say_single("Could not detect range: " + warn)
+            return
+        self.start_spin.setValue(start)
+        self.end_spin.setValue(end)
+        self._say_single("Detected range: %d - %d" % (start, end))
 
     # -- single: build --------------------------------------------------------
     def _on_build(self):
@@ -300,6 +306,7 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
                 previous_reference=(self._last_single_reference
                                     if self.chain_check.isChecked() else None),
                 cleanup_build_nodes=self.cleanup_check.isChecked(),
+                shift_to_zero=self.shift_check.isChecked(),
                 cfg=self._cfg,
             )
         except Exception:
@@ -420,14 +427,16 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         self.batch_end_spin.setRange(-100000, 100000)
         self.batch_end_spin.setValue(int(self._cfg.get("default_end", 240)))
         settings_row.addWidget(self.batch_end_spin)
-
         settings_row.addStretch(1)
-        batch_scene_btn = QtWidgets.QPushButton("Use scene range")
-        batch_scene_btn.clicked.connect(
-            lambda: self._use_scene_range(self.batch_fps_spin, self.batch_start_spin,
-                                          self.batch_end_spin))
-        settings_row.addWidget(batch_scene_btn)
         layout.addLayout(settings_row)
+
+        detect_row = QtWidgets.QHBoxLayout()
+        self.batch_detect_check = QtWidgets.QCheckBox(
+            "Auto-detect range per row (ignores Start/End above; each row's "
+            "own animation FBX range is used)")
+        detect_row.addWidget(self.batch_detect_check)
+        detect_row.addStretch(1)
+        layout.addLayout(detect_row)
 
         flags_row = QtWidgets.QHBoxLayout()
         self.batch_write_check = QtWidgets.QCheckBox("Write USDC now for each row")
@@ -435,12 +444,19 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         # without writing is rarely what you want when converting a folder.
         self.batch_write_check.setChecked(True)
         flags_row.addWidget(self.batch_write_check)
+        self.batch_shift_check = QtWidgets.QCheckBox(
+            "Shift each row's animation to start at frame 0")
+        flags_row.addWidget(self.batch_shift_check)
+        flags_row.addStretch(1)
+        layout.addLayout(flags_row)
+
+        flags_row1b = QtWidgets.QHBoxLayout()
         self.batch_ref_check = QtWidgets.QCheckBox(
             "Create Reference node per clip")
         self.batch_ref_check.setChecked(bool(self._cfg.get("default_create_reference", False)))
-        flags_row.addWidget(self.batch_ref_check)
-        flags_row.addStretch(1)
-        layout.addLayout(flags_row)
+        flags_row1b.addWidget(self.batch_ref_check)
+        flags_row1b.addStretch(1)
+        layout.addLayout(flags_row1b)
 
         flags_row2 = QtWidgets.QHBoxLayout()
         self.batch_chain_check = QtWidgets.QCheckBox(
@@ -524,12 +540,14 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
             return
 
         fps = self.batch_fps_spin.value()
-        start = self.batch_start_spin.value()
-        end = self.batch_end_spin.value()
+        shared_start = self.batch_start_spin.value()
+        shared_end = self.batch_end_spin.value()
+        auto_detect = self.batch_detect_check.isChecked()
         write_now = self.batch_write_check.isChecked()
         create_reference = self.batch_ref_check.isChecked()
         chain_references = self.batch_chain_check.isChecked()
         cleanup_build_nodes = self.batch_cleanup_check.isChecked()
+        shift_to_zero = self.batch_shift_check.isChecked()
 
         lines = []
         ok_count = 0
@@ -546,19 +564,29 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
             if not out:
                 out = _output_name_for(self._cfg, mesh, anim)
 
+            row_start, row_end = shared_start, shared_end
+            if auto_detect:
+                d_start, d_end, d_warn = core.detect_animation_range(mesh, anim)
+                if d_warn:
+                    lines.append("[FAIL] %s: could not detect range - %s"
+                                 % (label, d_warn))
+                    continue
+                row_start, row_end = d_start, d_end
+
             try:
                 result = core.build(
                     fbx_path=mesh,
                     anim_fbx_path=anim,
                     usdc_path=out,
                     fps=fps,
-                    start=start,
-                    end=end,
+                    start=row_start,
+                    end=row_end,
                     write_now=write_now,
                     create_reference=create_reference,
                     chain_references=chain_references,
                     previous_reference=previous_reference,
                     cleanup_build_nodes=cleanup_build_nodes,
+                    shift_to_zero=shift_to_zero,
                     cfg=self._cfg,
                 )
             except Exception:
@@ -575,7 +603,8 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
 
             ok_count += 1
             tag = "WROTE" if result.get("written") else "BUILT"
-            line = "[%s] %s -> %s" % (tag, label, result.get("usdc", out))
+            line = "[%s] %s (%d-%d) -> %s" % (tag, label, row_start, row_end,
+                                              result.get("usdc", out))
             if result.get("reference_node"):
                 line += "  (ref: %s)" % result["reference_node"]
             if result.get("cleaned_up"):

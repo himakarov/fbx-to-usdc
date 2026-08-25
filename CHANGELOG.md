@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.13
+- New: "Detect from Animation FBX" replaces "Use scene range" (Single tab).
+  Reads the real frame range straight from the animation FBX (or the mesh FBX
+  if no animation file is set) via a temporary, invisible FBX Character
+  Import node - so a clip an animator sent starting at frame 90 is detected
+  as 90-710 instead of defaulting to 1-240.
+- New: "Shift animation to start at frame 0" (Single) / "Shift each row's
+  animation to start at frame 0" (Batch) - retimes the animated stream (via a
+  Time Shift SOP) so the written .usdc always starts at frame 0, regardless
+  of what frame the source animation started at. The write range adjusts
+  automatically (e.g. 90-710 becomes 0-620).
+- New: "Auto-detect range per row" (Batch tab) - ignores the shared Start/End
+  fields and detects each row's own animation range individually, so a batch
+  of clips from different animators (each starting at a different frame) all
+  convert correctly without manual entry.
+- New public function core.detect_animation_range(fbx_path, anim_fbx_path).
+- NOTE: the Time Shift amount uses the standard "shift" parm name, which
+  hasn't been confirmed against a live node in this project (unlike the other
+  parameters used elsewhere). If the exported animation doesn't start at
+  frame 0 after enabling the shift option, or a warning about the "Time
+  Shift amount" parm appears, check the parm's exact name on a Time Shift SOP
+  and report it back.
+
 ## 1.0.12
 - Reference chain nodes now stack with a tight, single-node spacing by
   default (reference_node_spacing in config/settings.json, default 1.2)
