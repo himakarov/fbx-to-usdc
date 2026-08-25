@@ -65,6 +65,10 @@ _BUILTIN = {
     # Single tab: create a Reference LOP reading the written .usdc back into
     # /stage by default.
     "default_create_reference": False,
+
+    # Vertical spacing between chained/stacked Reference nodes in /stage.
+    # Kept tight by default so a chain of many clips (dozens) stays compact.
+    "reference_node_spacing": 1.2,
 }
 
 

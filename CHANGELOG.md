@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.12
+- Reference chain nodes now stack with a tight, single-node spacing by
+  default (reference_node_spacing in config/settings.json, default 1.2)
+  instead of the wider spacing used for the build-node pairs - a chain of
+  many clips (dozens of animations) now stays compact instead of stretching
+  far down the network view.
+- Fixed a UI alignment glitch: the "Chain onto the previous reference"
+  checkbox (Single tab) was indented in a way that broke the row's alignment
+  with the other checkboxes above/below it.
+
 ## 1.0.11
 - Fixed: repeated builds (successive Single-tab presses, or Batch rows) no
   longer land on top of each other in /stage. Each build() call now looks at

@@ -203,12 +203,9 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         self.ref_check.setChecked(bool(self._cfg.get("default_create_reference", False)))
         layout.addWidget(self.ref_check)
 
-        sub_flags_row = QtWidgets.QHBoxLayout()
-        sub_flags_row.addSpacing(20)
         self.chain_check = QtWidgets.QCheckBox(
             "Chain onto the previous reference (build one assembled stage)")
-        sub_flags_row.addWidget(self.chain_check)
-        layout.addLayout(sub_flags_row)
+        layout.addWidget(self.chain_check)
 
         self.cleanup_check = QtWidgets.QCheckBox(
             "Clean up build nodes after export (keep only the Reference node)")

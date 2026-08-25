@@ -17,5 +17,6 @@
     "flatten_stage": true,
     "usd_save_style": "flattenstage",
     "restgeo_partition_attribs": "fbx_material_name",
-    "default_create_reference": false
+    "default_create_reference": false,
+    "reference_node_spacing": 1.2
 }

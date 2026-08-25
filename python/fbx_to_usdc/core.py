@@ -124,6 +124,12 @@ def _next_free_y(parent, x_col, spacing=3.0, tol=2.5):
 # matching how they read as two distinct groups (scratch vs. final assembly).
 _BUILD_COLUMN_X = 0.0
 _REFERENCE_COLUMN_X = -6.0
+# The build column holds a 2-node pair per call (usdskel+rop), so it needs
+# more vertical room; the reference column holds a single node per call, so a
+# tight, single-node-height spacing keeps a long chain (dozens of clips)
+# compact instead of stretching down the network view.
+_BUILD_SPACING = 3.0
+_REFERENCE_SPACING_DEFAULT = 1.2
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +272,7 @@ def build(fbx_path,
     # Reserve a vertical slot in the build column before creating anything,
     # so this call's nodes land below whatever is already there (manual
     # nodes, or an earlier build()/batch row) instead of on top of it.
-    build_y = _next_free_y(stage, _BUILD_COLUMN_X)
+    build_y = _next_free_y(stage, _BUILD_COLUMN_X, spacing=_BUILD_SPACING)
     usdskel = stage.createNode(usdskel_type,
                                _unique_name(stage, "usdskel_import_%s" % name))
     report["usdskel_node"] = usdskel.path()
@@ -370,7 +376,9 @@ def build(fbx_path,
                 warnings.append("Reference node type not found (looked for: "
                                 "%s)." % ", ".join(_REFERENCE_CANDIDATES))
             else:
-                ref_y = _next_free_y(stage, _REFERENCE_COLUMN_X)
+                ref_spacing = float(cfg.get("reference_node_spacing",
+                                            _REFERENCE_SPACING_DEFAULT))
+                ref_y = _next_free_y(stage, _REFERENCE_COLUMN_X, spacing=ref_spacing)
                 ref_node = stage.createNode(
                     ref_type, _unique_name(stage, name))
                 _set_first_parm(ref_node, ("primpath1", "primpath"),
