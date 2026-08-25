@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.14
+- Fixed: "Detect from Animation FBX" was reporting Houdini's generic scene
+  range (1-240, i.e. $FSTART/$FEND) instead of the real file range. The
+  temporary FBX Character Import node was never actually cooked before
+  reading its Animation Start/End parms, so it had no file data to report -
+  per the node's own tooltip, it falls back to the scene default when that
+  happens. detect_animation_range() now forces a cook before reading the
+  range.
+
 ## 1.0.13
 - New: "Detect from Animation FBX" replaces "Use scene range" (Single tab).
   Reads the real frame range straight from the animation FBX (or the mesh FBX

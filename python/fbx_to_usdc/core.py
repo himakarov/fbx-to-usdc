@@ -188,6 +188,15 @@ def detect_animation_range(fbx_path, anim_fbx_path=None):
             except Exception:
                 pass
 
+        # The Animation Start/End parms only reflect the real file once the
+        # node has actually cooked (read the FBX) - otherwise they fall back
+        # to Houdini's scene $FSTART/$FEND (which is exactly the wrong,
+        # generic 1-240 some builds were reporting). Force a cook here.
+        try:
+            node.cook(force=True)
+        except Exception as exc:
+            return None, None, "Could not read the FBX file: %s" % exc
+
         sp = node.parm("animationstartframe")
         ep = node.parm("animationendframe")
         if sp is None or ep is None:
