@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.16
+- "Detect from Animation FBX" fix, take 2: confirmed the button parm name is
+  "reload" (Import tab). detect_animation_range() now presses it and then
+  forces a real cook via node.geometry() - node.cook(force=True) alone (used
+  in 1.0.14/1.0.15) was not enough to make the node actually read the file
+  before the Animation Start/End parms were read.
+
 ## 1.0.14
 - Fixed: "Detect from Animation FBX" was reporting Houdini's generic scene
   range (1-240, i.e. $FSTART/$FEND) instead of the real file range. The

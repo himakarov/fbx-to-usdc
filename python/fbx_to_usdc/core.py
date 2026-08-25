@@ -189,9 +189,20 @@ def detect_animation_range(fbx_path, anim_fbx_path=None):
                 pass
 
         # The Animation Start/End parms only reflect the real file once the
-        # node has actually cooked (read the FBX) - otherwise they fall back
-        # to Houdini's scene $FSTART/$FEND (which is exactly the wrong,
-        # generic 1-240 some builds were reporting). Force a cook here.
+        # node has actually loaded it. Confirmed sequence: press "Reload"
+        # (parm name "reload") to make the node (re-)read the FBX, then force
+        # a full cook by requesting geometry() - node.cook(force=True) alone
+        # was not enough to populate the range in testing.
+        reload_parm = node.parm("reload")
+        if reload_parm is not None:
+            try:
+                reload_parm.pressButton()
+            except Exception:
+                pass
+        try:
+            node.geometry()
+        except Exception:
+            pass
         try:
             node.cook(force=True)
         except Exception as exc:
