@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.11
+- Fixed: repeated builds (successive Single-tab presses, or Batch rows) no
+  longer land on top of each other in /stage. Each build() call now looks at
+  where existing nodes already sit and drops its new nodes into their own
+  free vertical slot, instead of relying on layoutChildren()'s relative-only
+  placement.
+- New: "Chain onto the previous reference" (Single tab) / "Chain all rows
+  into one assembled stage" (Batch tab) - wires each new Reference node's
+  input to the previous one, so successive conversions build up a single
+  composed stage (matching the common "several characters/animations laid
+  out together" case) instead of N disconnected Reference nodes.
+- New: "Clean up build nodes after export" (Single) / "...per row" (Batch) -
+  once the .usdc is written (and referenced, if requested), deletes the
+  per-clip build machinery (the OBJ FBX-import subnet and the UsdSkel-import
+  + USD ROP nodes in /stage), leaving only the Reference node(s) behind so
+  the network doesn't accumulate scratch nodes that are no longer needed.
+- Reference nodes now live in their own column in /stage, separate from the
+  per-clip build nodes, so the two groups read as distinct clusters.
+
 ## 1.0.10
 - Fixed a broken package manifest: fbx_to_usdc.json had been accidentally
   overwritten with settings content during the v1.0.8 update, which made

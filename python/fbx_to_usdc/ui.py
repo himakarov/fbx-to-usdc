@@ -58,6 +58,7 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         self.setMinimumWidth(640)
         self.setMinimumHeight(560)
         self._cfg, cfg_warn = _config.load_config()
+        self._last_single_reference = None  # for chaining across Single-tab presses
         self._build_ui()
         if cfg_warn:
             self._say_single(cfg_warn)
@@ -202,6 +203,17 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         self.ref_check.setChecked(bool(self._cfg.get("default_create_reference", False)))
         layout.addWidget(self.ref_check)
 
+        sub_flags_row = QtWidgets.QHBoxLayout()
+        sub_flags_row.addSpacing(20)
+        self.chain_check = QtWidgets.QCheckBox(
+            "Chain onto the previous reference (build one assembled stage)")
+        sub_flags_row.addWidget(self.chain_check)
+        layout.addLayout(sub_flags_row)
+
+        self.cleanup_check = QtWidgets.QCheckBox(
+            "Clean up build nodes after export (keep only the Reference node)")
+        layout.addWidget(self.cleanup_check)
+
         # 6. build + report
         self.build_btn = QtWidgets.QPushButton("Build && Convert")
         self.build_btn.setMinimumHeight(34)
@@ -287,12 +299,19 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
                 end=self.end_spin.value(),
                 write_now=self.write_check.isChecked(),
                 create_reference=self.ref_check.isChecked(),
+                chain_references=self.chain_check.isChecked(),
+                previous_reference=(self._last_single_reference
+                                    if self.chain_check.isChecked() else None),
+                cleanup_build_nodes=self.cleanup_check.isChecked(),
                 cfg=self._cfg,
             )
         except Exception:
             import traceback
             self._say_single("Build failed:\n%s" % traceback.format_exc())
             return
+
+        if result.get("reference_node_obj") is not None:
+            self._last_single_reference = result["reference_node_obj"]
 
         self._report_single(result)
 
@@ -326,6 +345,8 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
                          "now' ticked.")
         if result.get("reference_node"):
             lines.append("REFERENCE: " + result["reference_node"])
+        if result.get("cleaned_up"):
+            lines.append("(build nodes removed after export)")
         for w in result.get("warnings", []):
             lines.append("  ! " + w)
         self._say_single("\n".join(lines))
@@ -424,6 +445,16 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         flags_row.addStretch(1)
         layout.addLayout(flags_row)
 
+        flags_row2 = QtWidgets.QHBoxLayout()
+        self.batch_chain_check = QtWidgets.QCheckBox(
+            "Chain all rows into one assembled stage")
+        flags_row2.addWidget(self.batch_chain_check)
+        self.batch_cleanup_check = QtWidgets.QCheckBox(
+            "Clean up build nodes per row (keep only the Reference chain)")
+        flags_row2.addWidget(self.batch_cleanup_check)
+        flags_row2.addStretch(1)
+        layout.addLayout(flags_row2)
+
         # convert + report
         self.batch_convert_btn = QtWidgets.QPushButton("Convert All")
         self.batch_convert_btn.setMinimumHeight(34)
@@ -500,9 +531,12 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
         end = self.batch_end_spin.value()
         write_now = self.batch_write_check.isChecked()
         create_reference = self.batch_ref_check.isChecked()
+        chain_references = self.batch_chain_check.isChecked()
+        cleanup_build_nodes = self.batch_cleanup_check.isChecked()
 
         lines = []
         ok_count = 0
+        previous_reference = None
         for row in range(n):
             mesh = self._batch_cell(row, 0)
             anim = self._batch_cell(row, 1)
@@ -525,6 +559,9 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
                     end=end,
                     write_now=write_now,
                     create_reference=create_reference,
+                    chain_references=chain_references,
+                    previous_reference=previous_reference,
+                    cleanup_build_nodes=cleanup_build_nodes,
                     cfg=self._cfg,
                 )
             except Exception:
@@ -536,11 +573,16 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
                 lines.append("[FAIL] %s: %s" % (label, result["error"]))
                 continue
 
+            if result.get("reference_node_obj") is not None:
+                previous_reference = result["reference_node_obj"]
+
             ok_count += 1
             tag = "WROTE" if result.get("written") else "BUILT"
             line = "[%s] %s -> %s" % (tag, label, result.get("usdc", out))
             if result.get("reference_node"):
                 line += "  (ref: %s)" % result["reference_node"]
+            if result.get("cleaned_up"):
+                line += "  (build nodes removed)"
             lines.append(line)
             for w in result.get("warnings", []):
                 lines.append("      ! " + w)

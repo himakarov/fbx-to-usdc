@@ -93,6 +93,39 @@ def _clean_name(path):
     return safe or "character"
 
 
+def _next_free_y(parent, x_col, spacing=3.0, tol=2.5):
+    """Return a y position below every existing child of `parent` whose x
+    position is within `tol` of x_col.
+
+    layoutChildren(items=...) only arranges the nodes passed to it relative
+    to each other - it has no notion of nodes created by an earlier build()
+    call (a previous Single-tab press, or an earlier Batch row), so repeated
+    calls kept landing on the same spot and stacking exactly on top of each
+    other. Scanning existing node positions for the target column and
+    dropping the new cluster below them gives every build() call its own
+    vertical slot, without disturbing anything the user placed by hand
+    elsewhere in the network."""
+    min_y = None
+    for child in parent.children():
+        try:
+            pos = child.position()
+        except Exception:
+            continue
+        if abs(pos[0] - x_col) <= tol:
+            if min_y is None or pos[1] < min_y:
+                min_y = pos[1]
+    if min_y is None:
+        return 0.0
+    return min_y - spacing
+
+
+# Separate x-columns in /stage so the per-clip build machinery (UsdSkel import
+# + USD ROP) and the reference chain never land in the same visual column,
+# matching how they read as two distinct groups (scratch vs. final assembly).
+_BUILD_COLUMN_X = 0.0
+_REFERENCE_COLUMN_X = -6.0
+
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
@@ -104,6 +137,9 @@ def build(fbx_path,
           end=None,
           write_now=False,
           create_reference=False,
+          chain_references=False,
+          previous_reference=None,
+          cleanup_build_nodes=False,
           cfg=None):
     """Build the FBX -> UsdSkel -> USDC chain from scratch.
 
@@ -120,9 +156,26 @@ def build(fbx_path,
                         the written .usdc back in, named after the animation
                         clip. Useful for immediately dropping the exported
                         character into the same scene (e.g. to lay out a shot).
+        chain_references: if True (and create_reference is True), wire the new
+                        Reference node's input to `previous_reference`, so
+                        repeated build() calls (successive Single-tab presses,
+                        or Batch rows) assemble into one growing stage instead
+                        of N disconnected Reference nodes.
+        previous_reference: a hou.LopNode to chain onto (the previous call's
+                        report["reference_node_obj"]), or None to start a new
+                        chain. Ignored if chain_references is False.
+        cleanup_build_nodes: if True (and the file was written), delete the
+                        per-clip build machinery (the /obj FBX-import subnet
+                        and the /stage UsdSkel-import + USD ROP nodes) once
+                        it's no longer needed - the .usdc is already on disk,
+                        so only the Reference node (if any) needs to remain
+                        to show the asset in this scene.
         cfg:            a config.Config; loaded if None
 
-    Returns a dict report (see ui._report_result), or {"error": ...}.
+    Returns a dict report (see ui._report_result), or {"error": ...}. On
+    success, includes "reference_node_obj" (a hou.LopNode, not just its path)
+    when a reference was created, so the caller can pass it as
+    previous_reference on the next call to keep chaining.
     """
     warnings = []
     if cfg is None:
@@ -210,6 +263,10 @@ def build(fbx_path,
     # 2. LOP context: SOP Import UsdSkel Character
     # ================================================================
     stage = hou.node("/stage")
+    # Reserve a vertical slot in the build column before creating anything,
+    # so this call's nodes land below whatever is already there (manual
+    # nodes, or an earlier build()/batch row) instead of on top of it.
+    build_y = _next_free_y(stage, _BUILD_COLUMN_X)
     usdskel = stage.createNode(usdskel_type,
                                _unique_name(stage, "usdskel_import_%s" % name))
     report["usdskel_node"] = usdskel.path()
@@ -268,12 +325,17 @@ def build(fbx_path,
     _set_range_parms(rop, start, end, warnings, trange_full=True)
     report["rop"] = rop.path()
 
-    # Lay out only the nodes we just created (items=...), not the whole
-    # network - layoutChildren() with no arguments repositions EVERY node in
-    # /stage, which would scramble any manual arrangement the user already
-    # has in the network view.
+    # Lay usdskel/rop out relative to each other first (items=... so this
+    # never touches anything else in /stage), then drop the pair into the
+    # free slot reserved above - this is what stops repeated builds/batch
+    # rows from landing on top of each other.
     try:
         stage.layoutChildren(items=(usdskel, rop))
+        top_pos = usdskel.position()
+        delta = hou.Vector2(_BUILD_COLUMN_X - top_pos[0], build_y - top_pos[1])
+        for n in (usdskel, rop):
+            p = n.position()
+            n.setPosition(p + delta)
     except Exception:
         pass
 
@@ -308,6 +370,7 @@ def build(fbx_path,
                 warnings.append("Reference node type not found (looked for: "
                                 "%s)." % ", ".join(_REFERENCE_CANDIDATES))
             else:
+                ref_y = _next_free_y(stage, _REFERENCE_COLUMN_X)
                 ref_node = stage.createNode(
                     ref_type, _unique_name(stage, name))
                 _set_first_parm(ref_node, ("primpath1", "primpath"),
@@ -315,11 +378,49 @@ def build(fbx_path,
                 _set_first_parm(ref_node, ("filepath1", "filepath"),
                                 report["usdc"], warnings,
                                 "Reference file pattern")
-                report["reference_node"] = ref_node.path()
+
+                if chain_references and previous_reference is not None:
+                    try:
+                        ref_node.setInput(0, previous_reference)
+                    except Exception as exc:
+                        warnings.append("Could not chain to previous "
+                                        "reference: %s" % exc)
+
                 try:
-                    stage.layoutChildren(items=(ref_node,))
+                    ref_node.setPosition(hou.Vector2(_REFERENCE_COLUMN_X, ref_y))
                 except Exception:
                     pass
+
+                report["reference_node"] = ref_node.path()
+                report["reference_node_obj"] = ref_node
+    elif chain_references:
+        warnings.append("chain_references has no effect without "
+                        "create_reference enabled.")
+
+    # ================================================================
+    # 6. optionally clean up the per-clip build machinery
+    # ================================================================
+    if cleanup_build_nodes:
+        if not report.get("written"):
+            warnings.append("Cleanup skipped: USDC was not written.")
+        else:
+            if create_reference and not report.get("reference_node"):
+                warnings.append("Cleanup skipped: the reference node was not "
+                                "created, so nothing would remain in the "
+                                "scene to show this asset.")
+            else:
+                if not create_reference:
+                    warnings.append("Build nodes cleaned up without creating "
+                                    "a reference - this asset now exists only "
+                                    "in the written .usdc file, not in the "
+                                    "scene.")
+                for n in (rop, usdskel, geo):
+                    try:
+                        n.destroy()
+                    except Exception as exc:
+                        warnings.append("Could not remove %s: %s"
+                                        % (n.path(), exc))
+                report["cleaned_up"] = True
 
     return report
 
