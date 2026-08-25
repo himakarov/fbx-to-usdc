@@ -578,14 +578,21 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
                 out = _output_name_for(self._cfg, mesh, anim)
 
             row_start, row_end = shared_start, shared_end
+            row_fps_note = None
             if auto_detect:
-                d_start, d_end, _d_fps, d_warn = core.detect_animation_range(
+                d_start, d_end, d_fps, d_warn = core.detect_animation_range(
                     mesh, anim)
                 if d_warn:
                     lines.append("[FAIL] %s: could not detect range - %s"
                                  % (label, d_warn))
                     continue
                 row_start, row_end = d_start, d_end
+                # The fps field is applied to every row as-is (rows can come
+                # from different sources), so flag any row whose file was
+                # authored at a different rate rather than silently retiming.
+                if d_fps and abs(d_fps - fps) > 0.01:
+                    row_fps_note = ("      ! source file is %g fps, "
+                                    "converting at %g" % (d_fps, fps))
 
             try:
                 result = core.build(
@@ -624,6 +631,8 @@ class FbxToUsdcDialog(QtWidgets.QDialog):
             if result.get("cleaned_up"):
                 line += "  (build nodes removed)"
             lines.append(line)
+            if row_fps_note:
+                lines.append(row_fps_note)
             for w in result.get("warnings", []):
                 lines.append("      ! " + w)
 

@@ -47,9 +47,38 @@ and the capture pose.
 mesh FBX already contains the animation.
 4. The output `.usdc` path auto-fills from the animation FBX name (the per-shot
 name); editable.
-5. Set **FPS / Start / End**, or press **Use scene range**.
+5. Set **FPS / Start / End** manually, or press **Detect from Animation FBX** —
+it reads the clip's real frame range (the same frame numbers the animator sees)
+and fills in the file's native FPS.
 6. Leave **Write USDC now** off to only build and inspect the network, or tick
 it to build and write in one pass.
+
+Additional options on the Single tab:
+
+- **Shift animation to start at frame 0** — retimes a clip that starts at an
+arbitrary frame (say 235) so the exported file starts at zero.
+- **Create Reference node** — after writing, creates a Reference LOP in
+`/stage` reading the finished `.usdc` back into the scene.
+- **Chain onto the previous reference** — wires each new Reference node onto
+the previous one, assembling one stage instead of scattered nodes.
+- **Clean up build nodes after export** — removes the scratch network once the
+file is written, leaving only the Reference node.
+
+## Batch Convert
+
+A tab for converting many clips in one pass. The table of rows (mesh,
+animation, output) is filled via two buttons:
+
+- **Add Pair...** — different characters with different animations, one row at
+a time.
+- **Add Animations for One Mesh...** — one character, many animations: pick the
+mesh once, then multi-select the animation files.
+
+Shared settings (FPS / range / write / references / cleanup) apply to every
+row. **Auto-detect range per row** makes the tool ignore the Start/End fields
+and detect each row's own range instead; rows whose file fps differs from the
+FPS field are flagged in the report. The report lists each row's range, output
+path and result.
 
 The tool builds from scratch (variant A — unique node names each run):
 

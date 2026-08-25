@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.1.0
+First feature release since 1.0.0. Everything from the 1.0.x line, summarised:
+
+**Batch Convert tab**
+- Convert many clips in one pass from a table of (mesh, animation, output)
+  rows. "Add Pair..." for several different character+animation pairs;
+  "Add Animations for One Mesh..." to pick a mesh once and multi-select many
+  animation files.
+- "Auto-detect range per row" detects each row's own frame range instead of
+  applying one shared range to all, and flags rows whose source fps differs
+  from the FPS field.
+- Per-row report with the detected range, the written path, and per-row
+  success/failure.
+
+**Frame range handling**
+- "Detect from Animation FBX" reads the clip's real frame range (from the
+  clipinfo detail attribute, source_range x source_rate) - the clip's own
+  frame numbers as authored, matching what the animator sees.
+- "Shift animation to start at frame 0" retimes a clip that starts at an
+  arbitrary frame, via a Time Shift SOP plus a custom clip range on the
+  UsdSkel import.
+
+**Stage assembly**
+- Optional Reference node reading the written .usdc back into /stage.
+- Optional chaining of those Reference nodes into one assembled stage.
+- Optional cleanup of the per-clip build nodes once the file is written.
+- New nodes are placed in their own free slot instead of stacking on top of
+  earlier builds, and the reference chain stacks compactly.
+
+**Export correctness**
+- Subset Attributes (fbx_material_name) set on import, so the material tools
+  have per-material GeomSubsets to assign onto.
+- USD ROP saves with Flatten Stage, producing one self-contained .usdc.
+
+**Reliability**
+- Shelf registration moved to scripts/python/ready.py with hdefereval, fixing
+  the button not appearing on startup on some builds.
+- Self-update from GitHub with a Changelog viewer in the panel.
+
+## 1.0.21
+- Batch Convert with "Auto-detect range per row" now flags rows whose source
+  file was authored at a different fps than the FPS field. Auto-detect only
+  overrides Start/End - the shared FPS value is still applied to every row as
+  entered, so a 30fps clip converted in a 24fps batch gets a per-row note in
+  the report instead of being silently retimed.
+
 ## 1.0.20
 - "Shift animation to start at frame 0" works end to end now. The Time Shift
   SOP fix in 1.0.19 was correct but had no visible effect, because SOP Import
@@ -111,13 +157,6 @@
 - Reference nodes now live in their own column in /stage, separate from the
   per-clip build nodes, so the two groups read as distinct clusters.
 
-## 1.0.10
-- Fixed a broken package manifest: fbx_to_usdc.json had been accidentally
-  overwritten with settings content during the v1.0.8 update, which made
-  Houdini unable to locate the package at all (FBX2USDC_ROOT resolved to
-  None) after updating via "Check for updates". Restored the correct
-  manifest and the default_create_reference setting that was lost with it.
-
 ## 1.0.9
 - Fixed: building/converting no longer rearranges the whole /stage network.
   stage.layoutChildren() with no arguments repositions every node in the
@@ -139,19 +178,6 @@
   calls the same build() used by the Single tab. Report lists per-row
   success/failure and a final count.
 
-## 1.0.7
-- Fixed shelf button not appearing on startup: registration now runs from
-  scripts/python/ready.py via hdefereval.executeDeferred (same pattern as the
-  Character Material Tool), instead of scripts/456.py alone. 456.py runs too
-  early on some builds (observed with Steam Houdini Indie) for shelf objects
-  to be touched safely. 456.py is kept as a harmless secondary attempt.
-- Removed scripts/pythonrc.py (unreliable, replaced by ready.py).
-
-## 1.0.6
-- Fixed Subset Attributes not applying: the restgeo_partitionattribs value has
-  a separate enable toggle (restgeo_enablepartitionattribs) that must be set
-  to 1, or the node ignores the text value. Now both are set on build.
-
 ## 1.0.5
 - Added scripts/pythonrc.py as a second startup hook for shelf registration
   (more reliable than 456.py alone; idempotent, so no double buttons).
@@ -160,11 +186,6 @@
   GeomSubsets on import - required for Prop/Character Material Creator to have
   subsets to assign onto. Configurable via restgeo_partition_attribs in
   config/settings.json.
-
-## 1.0.4
-- New shelf icon.
-- Added GitHub Actions release workflow: pushing a vX.Y.Z tag now auto-packages
-  the repo and publishes the release, so the release zip always matches main.
 
 ## 1.0.3
 - Self-update from GitHub (himakarov/fbx-to-usdc), same pattern as the Character
